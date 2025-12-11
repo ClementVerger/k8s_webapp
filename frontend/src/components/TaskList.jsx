@@ -1,6 +1,4 @@
 // src/components/TaskList.jsx
-import React from 'react';
-
 export default function TaskList({ tasks }) {
   return (
     <ul>

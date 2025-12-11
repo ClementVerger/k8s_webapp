@@ -1,7 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState } from 'react';
-import TaskList from './components/TaskList';
-import TaskForm from './components/TaskForm';
+import { useEffect, useState } from 'react';
 import { fetchTasks, createTask } from './api/client';
 
 
