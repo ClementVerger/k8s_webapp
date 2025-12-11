@@ -79,28 +79,13 @@ jobs:
           echo "BACKEND_IMAGE_TAG=${{ steps.vars.outputs.BACKEND_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "FRONTEND_IMAGE_TAG=${{ steps.vars.outputs.FRONTEND_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
 
-
   deploy:
     needs: build-and-push
-    runs-on: ubuntu-latest
-
-    # KUBECONFIG sera utilisé automatiquement par kubectl
-    env:
-      KUBECONFIG: ${{ github.workspace }}/kubeconfig
+    runs-on: self-hosted 
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Write kubeconfig from secret
-        run: |
-          echo "${{ secrets.KUBE_CONFIG }}" > "$KUBECONFIG"
-
-      - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/kubectl
 
       - name: Update images in manifests
         run: |
@@ -110,10 +95,7 @@ jobs:
           echo "Using backend image: $BACKEND_IMAGE_TAG"
           echo "Using frontend image: $FRONTEND_IMAGE_TAG"
 
-          # Backend
           sed -i "s|image: clementvrg/k8s-webapp-backend:.*|image: ${BACKEND_IMAGE_TAG}|" k8s/deployment/backend-deployment.yaml
-
-          # Frontend
           sed -i "s|image: clementvrg/k8s-webapp-frontend:.*|image: ${FRONTEND_IMAGE_TAG}|" k8s/deployment/frontend-deployment.yaml
 
       - name: Apply Kubernetes manifests
