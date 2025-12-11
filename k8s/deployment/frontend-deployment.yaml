@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: clementvrg/k8s-webapp-frontend:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: clementvrg/k8s-webapp-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http
