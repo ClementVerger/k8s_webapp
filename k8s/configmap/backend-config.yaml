@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: 
+  name: backend-config
+  namespace: k8s-webapp
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+
+  # Config DB non sensible
+  DB_HOST: "postgresql"
+  DB_PORT: "5432"
+  DB_NAME: "tasksdb"
+  DB_USER: "app_user"

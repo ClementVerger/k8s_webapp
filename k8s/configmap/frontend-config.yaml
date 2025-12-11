@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: k8s-webapp
+data:
+  # URL de l'API vue du frontend
+  REACT_APP_API_URL: "http://backend:3000/api"
