@@ -1,0 +1,114 @@
+name: CI CD - k8s Webapp
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: docker.io
+  BACKEND_IMAGE_NAME: k8s-webapp-backend
+  FRONTEND_IMAGE_NAME: k8s-webapp-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASS: ${{ secrets.DOCKER_PASSWORD }}
+      BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}
+      FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}
+
+    outputs:
+      BACKEND_IMAGE_TAG: ${{ steps.images.outputs.BACKEND_IMAGE_TAG }}
+      FRONTEND_IMAGE_TAG: ${{ steps.images.outputs.FRONTEND_IMAGE_TAG }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          npm install
+      
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          npm install
+          npm run lint || true
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ env.DOCKER_PASS }}
+
+      - name: Build and push backend image
+        working-directory: backend
+        run: |
+          TAG=${{ github.sha }}
+          docker build -t $BACKEND_IMAGE:$TAG .
+          docker push $BACKEND_IMAGE:$TAG
+      
+      - name: Build and push frontend image
+        working-directory: frontend
+        run: |
+          TAG=${{ github.sha }}
+          docker build -t $FRONTEND_IMAGE:$TAG .
+          docker push $FRONTEND_IMAGE:$TAG
+
+      - name: Export image tags for next job
+        id: images
+        run: |
+          echo "BACKEND_IMAGE_TAG=$BACKEND_IMAGE:${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "FRONTEND_IMAGE_TAG=$FRONTEND_IMAGE:${{ github.sha }}" >> $GITHUB_OUTPUT
+    
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    env:
+      KUBECONFIG: ${{ github.workspace }}/kubeconfig
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Write kubeconfig from secret
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > "$KUBECONFIG"
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Update images in manifests
+        run: |
+          BACKEND_IMAGE_TAG="${{ needs.build-and-push.outputs.BACKEND_IMAGE_TAG }}"
+          FRONTEND_IMAGE_TAG="${{ needs.build-and-push.outputs.FRONTEND_IMAGE_TAG }}"
+
+          echo "Using backend image: $BACKEND_IMAGE_TAG"
+          echo "Using frontend image: $FRONTEND_IMAGE_TAG"
+
+          # Backend
+          sed -i "s|image: clementvrg/k8s-webapp-backend:.*|image: ${BACKEND_IMAGE_TAG}|" k8s/deployment/backend-deployment.yaml
+
+          # Frontend
+          sed -i "s|image: clementvrg/k8s-webapp-frontend:.*|image: ${FRONTEND_IMAGE_TAG}|" k8s/deployment/frontend-deployment.yaml
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/ -n k8s-webapp
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/backend -n k8s-webapp
+          kubectl rollout status deployment/frontend -n k8s-webapp
